@@ -8,6 +8,12 @@ If you use the tools to generate another bible, please be aware that the bible t
 
 Additionally, this tool relies on [BibleGateway.com](https://www.biblegateway.com/) to fetch the text of the bible. It uses DOM scraping, and thus could break at any time with changes to the site. If you find that a version is no longer generating, please open an issue.
 
+### Todo
+
+- [ ] Support formatting
+- [ ] Support footnotes
+- [ ] Detect Language
+
 ## Pregenerated Bibles
 
 Bibles in the public domain are already included, and be be found in the [/generated](https://github.com/solafide-dev/gobible-gen/tree/master/generated) directory.

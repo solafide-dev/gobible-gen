@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	md "github.com/JohannesKaufmann/html-to-markdown"
@@ -41,22 +42,8 @@ type GatewayVersions map[string]GatewayVersion
 
 func (v *GatewayVersion) ExpandData() {
 	log.Printf("Fetching additional data for %s", v.Name)
-
 	url := "https://www.biblegateway.com" + v.URL + "?interface=print"
-	res, err := http.Get(url)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		log.Fatalf("status code error: %d %s", res.StatusCode, res.Status)
-	}
-
-	// Load the HTML document
-	doc, err := goquery.NewDocumentFromReader(res.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
+	doc := docFromUrl(url)
 
 	// Find the review items
 	doc.Find(".vinfo-content").Each(func(i int, s *goquery.Selection) {
@@ -100,21 +87,7 @@ func getVersions() GatewayVersions {
 	fmt.Println("Getting available versions from Bible Gateway")
 
 	versions := map[string]GatewayVersion{}
-
-	res, err := http.Get("https://www.biblegateway.com/versions/?interface=print")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		log.Fatalf("status code error: %d %s", res.StatusCode, res.Status)
-	}
-
-	// Load the HTML document
-	doc, err := goquery.NewDocumentFromReader(res.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
+	doc := docFromUrl("https://www.biblegateway.com/versions/?interface=print")
 
 	// Find the review items
 	doc.Find(".info-row").Each(func(i int, s *goquery.Selection) {
@@ -149,8 +122,49 @@ func getVersions() GatewayVersions {
 	return versions
 }
 
+func getChapterVerses(version, book, chapter string) []bible.Verse {
+	log.Println("Getting verses for " + book + " " + chapter)
+
+	url := "https://www.biblegateway.com/passage/?search=" + book + " " + chapter + "&version=" + version + "&interface=print"
+	doc := docFromUrl(url)
+
+	verses := []bible.Verse{}
+
+	// Get the main text
+	doc.Find(".result-text-style-normal").Each(func(i int, s *goquery.Selection) {
+		s.Find("h3").Remove()
+		s.Find("sup").Remove() // TODO: footnotes!
+
+		s.Find("p").Each(func(i int, s *goquery.Selection) {
+			//html, _ := s.Html()
+			//fmt.Println(html + "\n\n")
+			s.Find("span").Each(func(i int, s *goquery.Selection) {
+				// These are the verses.
+				value, _ := s.Attr("class")
+				search := "text " + book + "-" + chapter + "-"
+				if strings.Contains(value, search) {
+					s.Find(".chapternum").Remove()
+					//fmt.Println(value, s.Text())
+					num, _ := strconv.Atoi(strings.TrimPrefix(value, search))
+					//fmt.Println(num)
+					v := bible.Verse{
+						Number: num,
+						Text:   s.Text(),
+						// Formatting:
+						// Footnotes:
+					}
+					verses = append(verses, v)
+				}
+			})
+		})
+
+	})
+
+	return verses
+}
+
 // Uses a public API at biblegateway.com to get the list of books in a bible translation
-func initFromBibleGateway(t string) bible.Bible {
+func getFromBibleGateway(t string) bible.Bible {
 
 	versions := getVersions()
 	if _, ok := versions[t]; !ok {
@@ -197,7 +211,7 @@ func initFromBibleGateway(t string) bible.Bible {
 			chap[j] = bible.Chapter{
 				Name:   book.Display + " " + fmt.Sprint(chapter.Chapter),
 				Number: chapter.Chapter,
-				Verses: []bible.Verse{},
+				Verses: getChapterVerses(t, book.Osis, fmt.Sprint(chapter.Chapter)),
 			}
 
 			// If the bible has headings, store them as titles.
@@ -214,4 +228,23 @@ func initFromBibleGateway(t string) bible.Bible {
 	}
 
 	return b
+}
+
+func docFromUrl(url string) *goquery.Document {
+	res, err := http.Get(url)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		log.Fatalf("status code error: %d %s", res.StatusCode, res.Status)
+	}
+
+	// Load the HTML document
+	doc, err := goquery.NewDocumentFromReader(res.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return doc
 }

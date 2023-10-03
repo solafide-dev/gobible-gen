@@ -14,7 +14,7 @@ func main() {
 
 	log.Printf("Generating %s bible", *t)
 
-	b := initFromBibleGateway(*t)
+	b := getFromBibleGateway(*t)
 
 	// marshal and save to file
 
